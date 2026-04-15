@@ -1,0 +1,35 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Airflow
+airflow/logs/
+airflow/airflow.db
+airflow/*.db
+
+# Data files (too large for GitHub)
+data/raw/
+data/processed/
+*.zip
+*.csv
+*.md5
+
+# Airflow hash file (runtime file)
+data/raw/.last_dataset_hash
+
+# Airflow runtime
+airflow/logs/
+airflow/airflow.db
+airflow/airflow.cfg
+
+# VS Code
+.vscode/
+
+# Notebooks checkpoints
+notebooks/.ipynb_checkpoints/
+
+# Pyright
+pyrightconfig.json

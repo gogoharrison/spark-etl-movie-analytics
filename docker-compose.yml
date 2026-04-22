@@ -1,4 +1,13 @@
 services:
+
+  # ── Postgres ───────────────────────────────────────────────────────────────
+  # Hosts three databases:
+  #   moviedb    — pipeline data (dims, facts, analytics)
+  #   airflowdb  — Airflow metadata
+  #   metabasedb — Metabase internal metadata
+  #
+  # The init script (./sql/create_databases.sql) creates airflowdb and
+  # metabasedb alongside the default moviedb.
   postgres:
     image: postgres:15
     container_name: movie_postgres
@@ -7,16 +16,17 @@ services:
       POSTGRES_PASSWORD: movie123
       POSTGRES_DB: moviedb
     ports:
-      - '5433:5432'
+      - '5433:5432'           # host:5433 → container:5432
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./sql:/docker-entrypoint-initdb.d
+      - ./sql:/docker-entrypoint-initdb.d   # runs all *.sql files on first boot
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U movieuser -d moviedb']
       interval: 10s
       timeout: 5s
       retries: 5
 
+  # ── Metabase ───────────────────────────────────────────────────────────────
   metabase:
     image: metabase/metabase:latest
     container_name: movie_metabase
@@ -33,6 +43,7 @@ services:
       postgres:
         condition: service_healthy
 
+  # ── Airflow init (runs once, exits) ───────────────────────────────────────
   airflow-init:
     build: .
     image: movie_airflow_custom:latest
@@ -41,20 +52,39 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      # Airflow internals
       AIRFLOW__CORE__EXECUTOR: LocalExecutor
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://movieuser:movie123@postgres/airflowdb
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
-      RAW_DATA_PATH: /opt/airflow/data/raw
       PIPELINE_VERSION: local
+
+      # Pipeline DB connection — used by dataset_utils.py inside Docker
+      MOVIE_DB_HOST: postgres
+      MOVIE_DB_PORT: '5432'
+      MOVIE_DB_NAME: moviedb
+      MOVIE_DB_USER: movieuser
+      MOVIE_DB_PASS: movie123
+
+      # JDBC URL for Spark → Postgres (internal Docker network)
+      JDBC_URL: jdbc:postgresql://postgres:5432/moviedb
+
+      # Data paths inside the container
+      RAW_DATA_PATH: /opt/airflow/data/raw
+      PROCESSED_DATA_PATH: /opt/airflow/data/processed
     volumes:
       - ./dags:/opt/airflow/dags
       - ./jobs:/opt/airflow/jobs
       - ./data:/opt/airflow/data
       - ./sql:/opt/airflow/sql
       - airflow_logs:/opt/airflow/logs
-    entrypoint: bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Harrison --lastname DE --role Admin --email admin@movieanalytics.com || true"
-    restart: on-failure
+    entrypoint: >
+      bash -c "
+        airflow db migrate &&
+        airflow users create --username admin --password admin --firstname Harrison --lastname DE --role Admin --email admin@movieanalytics.com || true
+      "
+    restart: "no"
 
+  # ── Airflow webserver ──────────────────────────────────────────────────────
   airflow-webserver:
     build: .
     image: movie_airflow_custom:latest
@@ -69,8 +99,18 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://movieuser:movie123@postgres/airflowdb
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      RAW_DATA_PATH: /opt/airflow/data/raw
       PIPELINE_VERSION: local
+
+      MOVIE_DB_HOST: postgres
+      MOVIE_DB_PORT: '5432'
+      MOVIE_DB_NAME: moviedb
+      MOVIE_DB_USER: movieuser
+      MOVIE_DB_PASS: movie123
+
+      JDBC_URL: jdbc:postgresql://postgres:5432/moviedb
+
+      RAW_DATA_PATH: /opt/airflow/data/raw
+      PROCESSED_DATA_PATH: /opt/airflow/data/processed
     volumes:
       - ./dags:/opt/airflow/dags
       - ./jobs:/opt/airflow/jobs
@@ -82,6 +122,7 @@ services:
     command: webserver
     restart: unless-stopped
 
+  # ── Airflow scheduler ──────────────────────────────────────────────────────
   airflow-scheduler:
     build: .
     image: movie_airflow_custom:latest
@@ -96,8 +137,18 @@ services:
       AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://movieuser:movie123@postgres/airflowdb
       AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
       AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
-      RAW_DATA_PATH: /opt/airflow/data/raw
       PIPELINE_VERSION: local
+
+      MOVIE_DB_HOST: postgres
+      MOVIE_DB_PORT: '5432'
+      MOVIE_DB_NAME: moviedb
+      MOVIE_DB_USER: movieuser
+      MOVIE_DB_PASS: movie123
+
+      JDBC_URL: jdbc:postgresql://postgres:5432/moviedb
+
+      RAW_DATA_PATH: /opt/airflow/data/raw
+      PROCESSED_DATA_PATH: /opt/airflow/data/processed
     volumes:
       - ./dags:/opt/airflow/dags
       - ./jobs:/opt/airflow/jobs

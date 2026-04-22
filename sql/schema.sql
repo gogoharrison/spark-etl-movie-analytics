@@ -87,3 +87,12 @@ CREATE INDEX IF NOT EXISTS idx_fact_movie  ON fact_ratings(movie_id);
 CREATE INDEX IF NOT EXISTS idx_fact_year   ON fact_ratings(rating_year);
 CREATE INDEX IF NOT EXISTS idx_decade      ON decade_stats(decade, avg_rating DESC);
 CREATE INDEX IF NOT EXISTS idx_genre_year  ON genre_trends(genre, rating_year);
+
+CREATE INDEX IF NOT EXISTS idx_fact_ratings_rating 
+ON fact_ratings(rating);
+
+CREATE INDEX IF NOT EXISTS idx_fact_ratings_year_rating 
+ON fact_ratings(rating_year, rating);
+
+CREATE INDEX IF NOT EXISTS idx_fact_ratings_count 
+ON fact_ratings(user_id, movie_id);
